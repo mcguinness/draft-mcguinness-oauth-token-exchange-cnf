@@ -1,0 +1,83 @@
+{
+  "magic": "E!vIA5L86J2I",
+  "timestamp": "2026-06-18T04:22:08.600114+00:00",
+  "repo": "mcguinness/draft-mcguinness-oauth-token-exchange-cnf",
+  "labels": [
+    {
+      "name": "bug",
+      "description": "Something isn't working",
+      "color": "d73a4a"
+    },
+    {
+      "name": "documentation",
+      "description": "Improvements or additions to documentation",
+      "color": "0075ca"
+    },
+    {
+      "name": "duplicate",
+      "description": "This issue or pull request already exists",
+      "color": "cfd3d7"
+    },
+    {
+      "name": "enhancement",
+      "description": "New feature or request",
+      "color": "a2eeef"
+    },
+    {
+      "name": "good first issue",
+      "description": "Good for newcomers",
+      "color": "7057ff"
+    },
+    {
+      "name": "help wanted",
+      "description": "Extra attention is needed",
+      "color": "008672"
+    },
+    {
+      "name": "invalid",
+      "description": "This doesn't seem right",
+      "color": "e4e669"
+    },
+    {
+      "name": "question",
+      "description": "Further information is requested",
+      "color": "d876e3"
+    },
+    {
+      "name": "wontfix",
+      "description": "This will not be worked on",
+      "color": "ffffff"
+    }
+  ],
+  "issues": [],
+  "pulls": [
+    {
+      "number": 1,
+      "id": "PR_kwDOS8o2Cc7nKvbI",
+      "title": "Add draft-mcguinness-oauth-token-exchange-cnf-00",
+      "url": "https://github.com/mcguinness/draft-mcguinness-oauth-token-exchange-cnf/pull/1",
+      "state": "MERGED",
+      "author": "mcguinness",
+      "authorAssociation": "OWNER",
+      "assignees": [],
+      "labels": [],
+      "body": "## Summary\n\nInitial `-00` of **Confirmation Response Parameter for OAuth 2.0 Token Exchange**, written in kramdown-rfc (matching the repo's build tooling). Replaces the `i-d-template` placeholder.\n\nDefines a `cnf` response parameter for OAuth 2.0 Token Exchange ([RFC 8693]) so a client can verify that sender-constraint binding (DPoP, mTLS) was applied **without inspecting the issued token** \u2014 covering opaque tokens, encrypted tokens, and the `token_type=N_A` case where the existing binding signal is unavailable.\n\n## Contents\n\n- Confirmation Response Parameter + comparison rules vs. the in-token `cnf` claim\n- Authorization Server and Client behavior (fail-closed on absent `cnf`)\n- `token_exchange_cnf_response_supported` AS metadata\n- Examples (DPoP / mTLS / no-constraint), Security Considerations, IANA registrations\n\n## Build\n\nBuilds clean through `kramdown-rfc` \u2192 `xml2rfc --text` with zero warnings; all cross-references and the 8 normative/informative references resolve.\n\n[RFC 8693]: https://www.rfc-editor.org/rfc/rfc8693",
+      "createdAt": "2026-06-16T19:40:55Z",
+      "updatedAt": "2026-06-16T19:41:15Z",
+      "baseRepository": "mcguinness/draft-mcguinness-oauth-token-exchange-cnf",
+      "baseRefName": "main",
+      "baseRefOid": "bdc128dd3b179d1021609426803baebf5711b046",
+      "headRepository": "mcguinness/draft-mcguinness-oauth-token-exchange-cnf",
+      "headRefName": "draft-cnf-00",
+      "headRefOid": "02cc2e058434c6c29a17ee2801fa90ed08e8c9a7",
+      "closedAt": "2026-06-16T19:41:11Z",
+      "mergedAt": "2026-06-16T19:41:11Z",
+      "mergedBy": "mcguinness",
+      "mergeCommit": {
+        "oid": "b940578c3085adcac046ba1568a2f344c8c8758a"
+      },
+      "comments": [],
+      "reviews": []
+    }
+  ]
+}
