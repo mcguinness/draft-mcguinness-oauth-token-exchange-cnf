@@ -1,0 +1,501 @@
+
+
+
+
+Web Authorization Protocol                                 K. McGuinness
+Internet-Draft                                               Independent
+Intended status: Standards Track                            19 July 2026
+Expires: 20 January 2027
+
+
+      Confirmation Response Parameter for OAuth 2.0 Token Exchange
+            draft-mcguinness-oauth-token-exchange-cnf-latest
+
+Abstract
+
+   This specification defines a cnf response parameter for the OAuth 2.0
+   Token Exchange (RFC 8693) response.  The parameter carries the
+   confirmation method that the authorization server applied to the
+   issued token, enabling clients to verify that sender-constraint
+   binding (for example a DPoP key or mutual-TLS client certificate) was
+   performed without inspecting the issued token.  This is useful for
+   opaque tokens, encrypted tokens, or any other case where the client
+   cannot read the issued token's cnf claim directly.
+
+About This Document
+
+   This note is to be removed before publishing as an RFC.
+
+   Status information for this document may be found at
+   https://datatracker.ietf.org/doc/draft-mcguinness-oauth-token-
+   exchange-cnf/.
+
+   Discussion of this document takes place on the Web Authorization
+   Protocol Working Group mailing list (mailto:oauth@ietf.org), which is
+   archived at https://mailarchive.ietf.org/arch/browse/oauth/.
+   Subscribe at https://www.ietf.org/mailman/listinfo/oauth/.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 20 January 2027.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+   2.  Conventions and Definitions
+   3.  Confirmation Response Parameter
+     3.1.  Relationship to the In-Token cnf Claim
+   4.  Authorization Server Behavior
+   5.  Client Behavior
+   6.  Examples
+     6.1.  DPoP-Bound Token
+     6.2.  Mutual-TLS-Bound Token
+     6.3.  No Sender-Constraint Applied
+   7.  Security Considerations
+     7.1.  The Response Parameter Is Informational
+     7.2.  TLS for the Response
+     7.3.  Replay and Freshness
+     7.4.  Disclosure
+   8.  IANA Considerations
+   9.  References
+     9.1.  Normative References
+     9.2.  Informative References
+   Acknowledgments
+   Document History
+   Author's Address
+
+1.  Introduction
+
+   OAuth 2.0 Token Exchange [RFC8693] defines a protocol for exchanging
+   one security token for another.  The Token Exchange request can
+   convey inputs that trigger the authorization server to issue a
+   sender-constrained token: a DPoP proof [RFC9449] in the request
+   header, a mutual-TLS client certificate [RFC8705], or a future
+   sender-constraint method.
+
+   When the authorization server applies sender-constraining to the
+   issued token, the primary signal to the client is the cnf claim
+   ([RFC7800]) inside the issued token.  For JWT-formatted tokens the
+   client can read, this works.  The signal fails in three deployment
+   shapes:
+
+   1.  *Opaque tokens.* The issued token is an unstructured string and
+       the client cannot read any claim from it.
+
+   2.  *Encrypted tokens.* The issued token is a JWE encrypted to a
+       downstream consumer (such as a Resource Authorization Server
+       [I-D.ietf-oauth-identity-assertion-authz-grant]), and the client
+       does not hold the decryption key.
+
+   3.  *token_type is "N_A".* Section 2.2.1 of [RFC8693] requires the
+       token_type response parameter to be N_A when the issued token is
+       not used directly as an access token.  Existing sender-constraint
+       methods, such as DPoP [RFC9449], rely on token_type carrying the
+       binding method (token_type: "DPoP"), and that signal is
+       unavailable here.
+
+   Without a protocol-level signal in the Token Exchange response, an
+   authorization server that silently fails to apply sender-constraining
+   (by error or by misbehavior) can downgrade the issued token without
+   the client noticing.
+
+   This document closes the gap by adding an optional cnf parameter to
+   the Token Exchange response.  The parameter carries the same
+   confirmation structure that [RFC7800] defines for the cnf claim.  The
+   client verifies the response cnf against the key or certificate it
+   provided in the request, the same way it would verify the in-token
+   cnf claim, and treats absence (when sender-constraining was expected)
+   as a downgrade.
+
+2.  Conventions and Definitions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   [BCP14] (RFC2119) (RFC8174) when, and only when, they appear in all
+   capitals, as shown here.
+
+   This document uses the terms "access token," "authorization server,"
+   "client," "resource server," and "token endpoint" defined by OAuth
+   2.0 [RFC6749].  The "issued token" is the token returned in the
+   access_token member of a Token Exchange response (Section 2.2.1 of
+   [RFC8693]).
+
+   A "confirmation method" is a sender-constraint binding mechanism
+   registered in the "JWT Confirmation Methods" registry established by
+   [RFC7800], such as the JWK SHA-256 Thumbprint (jkt) defined in
+   [RFC9449] and the X.509 Certificate SHA-256 Thumbprint (x5t#S256)
+   defined in [RFC8705].
+
+3.  Confirmation Response Parameter
+
+   This specification adds the following optional parameter to the Token
+   Exchange response defined in Section 2.2 of [RFC8693]:
+
+   cnf:  OPTIONAL.  A JSON object containing one or more confirmation
+      members as defined in Section 3 of [RFC7800].  The value
+      identifies the confirmation method that the authorization server
+      applied to the issued token, allowing the client to verify the
+      sender-constraint binding without inspecting the issued token.
+
+   The parameter's structure and member names are those of the cnf JWT
+   claim [RFC7800]; this document defines no new confirmation methods.
+   Conveying a token's confirmation outside the token follows the
+   precedent of token introspection (Section 3.2 of [RFC8705];
+   Section 6.2 of [RFC9449]).
+
+   The parameter describes only the issued token, not any refresh_token
+   returned in the same response.  It is defined only for Token Exchange
+   responses; its use with other grant types is out of scope.  Clients
+   that do not support this specification ignore unrecognized response
+   members (Section 5.1 of [RFC6749]).
+
+3.1.  Relationship to the In-Token cnf Claim
+
+   When the issued token is a JWT carrying a cnf claim, the cnf response
+   parameter MUST represent the same confirmation as that claim: the
+   same confirmation member name(s) identifying the same key or
+   certificate.  The parameter does not replace the claim; the client
+   verifies the binding from the response while the token's consumer
+   validates it from the token itself.  A client that can read the
+   issued token's cnf claim MUST reject the response if the two values
+   do not represent the same confirmation.
+
+   Wherever this document compares two cnf values (a response parameter
+   against an in-token claim, or against the client's sender-constraint
+   input), the comparison is by confirmation method and value, not by
+   byte representation:
+
+   *  JSON member ordering and insignificant whitespace are ignored.
+
+   *  A thumbprint member (for example jkt or x5t#S256) is compared as
+      the base64url-encoded string it represents.
+
+   *  A full public key in a jwk member is compared against a thumbprint
+      by computing the key's JWK SHA-256 Thumbprint ([RFC7638]).
+
+   These rules avoid a dependency on any particular JSON
+   canonicalization scheme.
+
+4.  Authorization Server Behavior
+
+   When the authorization server applies sender-constraining to the
+   token it issues in response to a Token Exchange request:
+
+   *  It MUST include the cnf parameter in the Token Exchange response.
+
+   *  The confirmation member name and value MUST identify the
+      confirmation method actually applied to the issued token.
+
+   *  The cnf parameter SHOULD contain exactly one confirmation member
+      and MUST NOT contain a member identifying a binding that was not
+      applied.
+
+   When the authorization server does not apply sender-constraining to
+   the issued token, it MUST NOT include the cnf parameter in the
+   response.
+
+   When the authorization server receives sender-constraint input (for
+   example a DPoP proof header or a mutual-TLS client certificate) but
+   does not apply the binding, it SHOULD reject the request with an
+   error response (Section 2.2.2 of [RFC8693]) rather than issue an
+   unbound token.  If it issues the token anyway, omitting cnf signals
+   the downgrade to the client.
+
+5.  Client Behavior
+
+   A client that provides sender-constraint input in a Token Exchange
+   request (for example a DPoP proof or a mutual-TLS client certificate)
+   MUST validate the Token Exchange response as follows:
+
+   1.  The client MUST treat a cnf value that is not a JSON object, or
+       is an empty JSON object, as if cnf were absent.
+
+   2.  If the response does not contain a cnf parameter (or contains one
+       treated as absent per the previous rule), the client MUST treat
+       the issued token as not sender-constrained.  A client that
+       requires sender-constraining MUST reject the response and not use
+       the issued token.
+
+   3.  Otherwise, the client MUST verify that cnf contains the
+       confirmation member corresponding to its sender-constraint input
+       and that the member's value matches that input:
+
+       *  For a DPoP proof: a jkt member whose value equals the JWK
+          SHA-256 Thumbprint ([RFC7638]) of the public key in the DPoP
+          proof JWT.
+
+       *  For a mutual-TLS client certificate: an x5t#S256 member whose
+          value equals the base64url-encoded SHA-256 hash of the
+          certificate's DER encoding ([RFC8705]).
+
+       If the corresponding member is absent or its value does not
+       match, the client MUST reject the response and not use the issued
+       token.  The client MUST ignore any other confirmation members.
+
+   Absence of cnf indicates either a downgrade (intentional or
+   otherwise) or an authorization server that does not implement this
+   specification; the rules above treat both the same.
+
+   A client that did not provide sender-constraint input but receives a
+   response containing cnf holds a token bound to the identified key or
+   certificate.  If the client holds that key or certificate (for
+   example, the certificate it used for mutual-TLS client
+   authentication), it MAY use the issued token and SHOULD satisfy the
+   confirmation method when presenting it.  Otherwise the issued token
+   is unusable, and the client SHOULD treat the response as an error.
+
+6.  Examples
+
+   The examples in this section illustrate the cnf response parameter
+   for different confirmation methods.  Extra line breaks in request
+   bodies and header fields are for display purposes only.
+
+6.1.  DPoP-Bound Token
+
+   A client includes a DPoP proof header [RFC9449] in a Token Exchange
+   request for an Identity Assertion JWT Authorization Grant (ID-JAG)
+   [I-D.ietf-oauth-identity-assertion-authz-grant].  Because token_type
+   is N_A for an ID-JAG, it cannot signal the binding; the authorization
+   server instead includes cnf with a jkt member in the response.
+
+   POST /oauth2/token HTTP/1.1
+   Host: as.example
+   Content-Type: application/x-www-form-urlencoded
+   DPoP: eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7...
+
+   grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+   &requested_token_type=
+    urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aid-jag
+   &audience=https%3A%2F%2Fras.example%2F
+   &subject_token=eyJraWQiOiJzMTZ0cVNtODhwREo4VGZCXzdrSEtQ...
+   &subject_token_type=
+    urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aid_token
+
+   HTTP/1.1 200 OK
+   Content-Type: application/json;charset=UTF-8
+   Cache-Control: no-store
+
+   {
+     "issued_token_type": "urn:ietf:params:oauth:token-type:id-jag",
+     "access_token": "eyJ0eXAiOi...",
+     "token_type": "N_A",
+     "expires_in": 300,
+     "cnf": {
+       "jkt": "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+     }
+   }
+
+   The client compares the jkt value to the JWK SHA-256 Thumbprint of
+   its DPoP public key and rejects the response on mismatch.
+
+6.2.  Mutual-TLS-Bound Token
+
+   A client establishes a mutual-TLS connection to the token endpoint
+   and presents a client certificate.  The authorization server applies
+   the binding and includes cnf with an x5t#S256 member [RFC8705] in the
+   response.
+
+   HTTP/1.1 200 OK
+   Content-Type: application/json;charset=UTF-8
+   Cache-Control: no-store
+
+   {
+     "issued_token_type":
+       "urn:ietf:params:oauth:token-type:access_token",
+     "access_token": "mF_9.B5f-4.1JqM",
+     "token_type": "Bearer",
+     "expires_in": 3600,
+     "cnf": {
+       "x5t#S256": "bwcK0esc3ACC3DB2Y5_lESsXE8o9ltc05O89jdN-dg2"
+     }
+   }
+
+6.3.  No Sender-Constraint Applied
+
+   The client did not supply a DPoP proof or a mutual-TLS client
+   certificate.  The authorization server issues an unbound token and
+   omits cnf.
+
+   HTTP/1.1 200 OK
+   Content-Type: application/json;charset=UTF-8
+   Cache-Control: no-store
+
+   {
+     "issued_token_type": "urn:ietf:params:oauth:token-type:id-jag",
+     "access_token": "eyJ0eXAiOi...",
+     "token_type": "N_A",
+     "expires_in": 300
+   }
+
+   A client that provided sender-constraint input treats this token as
+   unbound and, if it requires sender-constraining, rejects the response
+   (Section 5).
+
+7.  Security Considerations
+
+7.1.  The Response Parameter Is Informational
+
+   The cnf response parameter is informational.  Authoritative
+   enforcement of the binding occurs when the issued token is presented
+   to its consumer (a resource server or another authorization server),
+   which validates the token's cnf claim against the presenter's proof.
+   A verified response cnf tells the client only that the authorization
+   server did not downgrade issuance, not that the token's consumer will
+   enforce the binding; both checks are needed end-to-end.
+
+   This check defends against an authorization server that fails to
+   apply sender-constraining through error or misconfiguration.  It does
+   not defend against a malicious authorization server, which issues the
+   token and controls its contents entirely.  Protection against a
+   hostile issuer is out of scope for this document.
+
+7.2.  TLS for the Response
+
+   TLS, already required for the token endpoint by Section 3.2 of
+   [RFC6749], prevents an on-path attacker from stripping or modifying
+   the cnf parameter to suppress the binding signal.
+
+7.3.  Replay and Freshness
+
+   This specification does not itself prevent replay of the response cnf
+   value.  The replay protections of the underlying sender-constraint
+   method continue to apply: the DPoP nonce and jti ([RFC9449]) and, for
+   mutual TLS, the live TLS session.
+
+7.4.  Disclosure
+
+   The cnf response parameter discloses the binding method and a key or
+   certificate thumbprint only to the client that initiated the request,
+   which already holds the corresponding key material.  A thumbprint is
+   a one-way hash and reveals no additional personal data, though it is
+   a stable correlator for the bound key.
+
+   Authorization servers SHOULD use a thumbprint member (such as jkt)
+   rather than a full jwk member: the client can recompute the
+   thumbprint from the key it already holds, so a full key discloses
+   more material than verification requires and enlarges the response.
+
+8.  IANA Considerations
+
+   IANA is requested to register the following parameter in the "OAuth
+   Parameters" registry [IANA.oauth-parameters] established by
+   [RFC6749]:
+
+   *  Parameter Name: cnf
+
+   *  Parameter Usage Location: token response
+
+   *  Change Controller: IETF
+
+   *  Specification Document(s): Section 3 of this document
+
+9.  References
+
+9.1.  Normative References
+
+   [BCP14]    Best Current Practice 14,
+              <https://www.rfc-editor.org/info/bcp14>.
+              At the time of writing, this BCP comprises the following:
+
+              Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+              Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/info/rfc8174>.
+
+   [IANA.oauth-parameters]
+              IANA, "OAuth Parameters",
+              <https://www.iana.org/assignments/oauth-parameters>.
+
+   [RFC6749]  Hardt, D., Ed., "The OAuth 2.0 Authorization Framework",
+              RFC 6749, DOI 10.17487/RFC6749, October 2012,
+              <https://www.rfc-editor.org/rfc/rfc6749>.
+
+   [RFC7638]  Jones, M. and N. Sakimura, "JSON Web Key (JWK)
+              Thumbprint", RFC 7638, DOI 10.17487/RFC7638, September
+              2015, <https://www.rfc-editor.org/rfc/rfc7638>.
+
+   [RFC7800]  Jones, M., Bradley, J., and H. Tschofenig, "Proof-of-
+              Possession Key Semantics for JSON Web Tokens (JWTs)",
+              RFC 7800, DOI 10.17487/RFC7800, April 2016,
+              <https://www.rfc-editor.org/rfc/rfc7800>.
+
+   [RFC8693]  Jones, M., Nadalin, A., Campbell, B., Ed., Bradley, J.,
+              and C. Mortimore, "OAuth 2.0 Token Exchange", RFC 8693,
+              DOI 10.17487/RFC8693, January 2020,
+              <https://www.rfc-editor.org/rfc/rfc8693>.
+
+   [RFC8705]  Campbell, B., Bradley, J., Sakimura, N., and T.
+              Lodderstedt, "OAuth 2.0 Mutual-TLS Client Authentication
+              and Certificate-Bound Access Tokens", RFC 8705,
+              DOI 10.17487/RFC8705, February 2020,
+              <https://www.rfc-editor.org/rfc/rfc8705>.
+
+   [RFC9449]  Fett, D., Campbell, B., Bradley, J., Lodderstedt, T.,
+              Jones, M., and D. Waite, "OAuth 2.0 Demonstrating Proof of
+              Possession (DPoP)", RFC 9449, DOI 10.17487/RFC9449,
+              September 2023, <https://www.rfc-editor.org/rfc/rfc9449>.
+
+9.2.  Informative References
+
+   [I-D.ietf-oauth-identity-assertion-authz-grant]
+              Parecki, A., McGuinness, K., and B. Campbell, "Identity
+              Assertion JWT Authorization Grant", Work in Progress,
+              Internet-Draft, draft-ietf-oauth-identity-assertion-authz-
+              grant-04, 21 May 2026,
+              <https://datatracker.ietf.org/doc/html/draft-ietf-oauth-
+              identity-assertion-authz-grant-04>.
+
+Acknowledgments
+
+   The gap addressed by this specification was identified during work on
+   "OAuth Identity Assertion Authorization Grant"
+   [I-D.ietf-oauth-identity-assertion-authz-grant], where the
+   combination of token_type: "N_A" (mandated by [RFC8693]) and optional
+   ID-JAG encryption removed the existing client-side path for detecting
+   sender-constraint downgrade.
+
+Document History
+
+      |  [[ To be removed from the final specification ]]
+
+   -00
+
+   *  Initial draft.
+
+Author's Address
+
+   Karl McGuinness
+   Independent
+   Email: public@karlmcguinness.com
