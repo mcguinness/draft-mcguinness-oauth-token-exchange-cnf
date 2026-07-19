@@ -85,7 +85,7 @@ shapes:
    `token_type` response parameter to be `N_A` when the issued token
    is not used directly as an access token. Existing sender-constraint
    methods, such as DPoP {{RFC9449}}, rely on `token_type` carrying
-   the binding method (`token_type: "DPoP"`) and that signal is
+   the binding method (`token_type: "DPoP"`), and that signal is
    unavailable here.
 
 Without a protocol-level signal in the Token Exchange response, an
@@ -95,7 +95,7 @@ the client noticing.
 
 This document closes the gap by adding an optional `cnf` parameter to
 the Token Exchange response. The parameter carries the same
-Confirmation structure defined in {{RFC7800}} for the `cnf` claim. The
+confirmation structure that {{RFC7800}} defines for the `cnf` claim. The
 client verifies the response `cnf` against the key or certificate it
 provided in the request, the same way it would verify the in-token
 `cnf` claim, and treats absence (when sender-constraining was
@@ -106,18 +106,17 @@ expected) as a downgrade.
 
 {::boilerplate bcp14-tagged-bcp14}
 
-This document uses the terms "access token," "authorization server,"
-"client," "resource server," "token endpoint," and "token response"
-defined by OAuth 2.0 {{RFC6749}} and the terms "subject token,"
-"actor token," "issued token type," and "token type identifier"
-defined by OAuth 2.0 Token Exchange {{RFC8693}}.
+This document uses the terms "access token," "authorization
+server," "client," "resource server," and "token endpoint" defined
+by OAuth 2.0 {{RFC6749}}. The "issued token" is the token returned
+in the `access_token` member of a Token Exchange response
+({{Section 2.2.1 of RFC8693}}).
 
-This document uses the term "confirmation method" as defined in
-{{RFC7800}} to refer to any of the sender-constraint binding
-mechanisms recognized by the `cnf` claim, including the JWK
-Thumbprint Confirmation Method (`jkt`) defined in {{RFC9449}} and
-the X.509 Certificate Thumbprint Confirmation Method (`x5t#S256`)
-defined in {{RFC8705}}.
+A "confirmation method" is a sender-constraint binding mechanism
+registered in the "JWT Confirmation Methods" registry established
+by {{RFC7800}}, such as the JWK SHA-256 Thumbprint (`jkt`) defined
+in {{RFC9449}} and the X.509 Certificate SHA-256 Thumbprint
+(`x5t#S256`) defined in {{RFC8705}}.
 
 
 # Confirmation Response Parameter {#cnf-response-parameter}
@@ -133,15 +132,14 @@ Token Exchange response defined in {{Section 2.2 of RFC8693}}:
   sender-constraint binding without inspecting the issued token.
 
 The parameter's structure and member names are those of the `cnf`
-JWT claim {{RFC7800}}, drawn from the IANA "JWT Confirmation
-Methods" registry; this document defines no new confirmation
+JWT claim {{RFC7800}}; this document defines no new confirmation
 methods. Conveying a token's confirmation outside the token follows
 the precedent of token introspection ({{Section 3.2 of RFC8705}};
 {{Section 6.2 of RFC9449}}).
 
-The parameter describes only the token in the `access_token`
-response member (the issued token), not any `refresh_token` in the
-same response. It is defined only for Token Exchange responses; its
+The parameter describes only the issued token, not any
+`refresh_token` returned in the same response. It is defined only
+for Token Exchange responses; its
 use with other grant types is out of scope. Clients that do not
 support this specification ignore unrecognized response members
 ({{Section 5.1 of RFC6749}}).
@@ -209,35 +207,31 @@ A client that provides sender-constraint input in a Token Exchange
 request (for example a DPoP proof or a mutual-TLS client
 certificate) MUST validate the Token Exchange response as follows:
 
-1. If the response contains a `cnf` parameter, the client MUST
-   verify that its confirmation method and value match the
-   sender-constraint input:
+1. The client MUST treat a `cnf` value that is not a JSON object,
+   or is an empty JSON object, as if `cnf` were absent.
 
-   * For a DPoP proof: `cnf` MUST contain a `jkt` member whose
-     value equals the JWK SHA-256 Thumbprint ({{RFC7638}}) of the
-     public key in the DPoP proof JWT.
+2. If the response does not contain a `cnf` parameter (or contains
+   one treated as absent per the previous rule), the client MUST
+   treat the issued token as not sender-constrained. A client that
+   requires sender-constraining MUST reject the response and not
+   use the issued token.
 
-   * For a mutual-TLS client certificate: `cnf` MUST contain an
-     `x5t#S256` member whose value equals the base64url-encoded
-     SHA-256 hash of the certificate's DER encoding ({{RFC8705}}).
+3. Otherwise, the client MUST verify that `cnf` contains the
+   confirmation member corresponding to its sender-constraint
+   input and that the member's value matches that input:
 
-   If verification fails, including when `cnf` carries a different
-   confirmation method than the input the client provided, the
-   client MUST reject the response and not use the issued token.
+   * For a DPoP proof: a `jkt` member whose value equals the JWK
+     SHA-256 Thumbprint ({{RFC7638}}) of the public key in the
+     DPoP proof JWT.
 
-2. The client MUST treat a `cnf` value that is not a JSON object,
-   is an empty JSON object, or contains no confirmation member the
-   client can verify as if `cnf` were absent.
+   * For a mutual-TLS client certificate: an `x5t#S256` member
+     whose value equals the base64url-encoded SHA-256 hash of the
+     certificate's DER encoding ({{RFC8705}}).
 
-3. If the response does not contain a `cnf` parameter, the client
-   MUST treat the issued token as not sender-constrained. A client
-   that requires sender-constraining MUST reject the response and
-   not use the issued token.
-
-4. If the `cnf` parameter contains more than one confirmation
-   member, the client MUST apply the checks above to the member
-   corresponding to its sender-constraint input and MUST ignore
-   members whose confirmation method it does not recognize.
+   If the corresponding member is absent or its value does not
+   match, the client MUST reject the response and not use the
+   issued token. The client MUST ignore any other confirmation
+   members.
 
 Absence of `cnf` indicates either a downgrade (intentional or
 otherwise) or an authorization server that does not implement this
