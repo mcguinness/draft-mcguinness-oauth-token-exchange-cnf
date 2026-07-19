@@ -35,7 +35,6 @@ normative:
   RFC6749:
   RFC7638:
   RFC7800:
-  RFC8414:
   RFC8693:
   RFC8705:
   RFC9449:
@@ -242,8 +241,7 @@ certificate) MUST validate the Token Exchange response as follows:
 
 Absence of `cnf` indicates either a downgrade (intentional or
 otherwise) or an authorization server that does not implement this
-specification; the metadata of {{as-metadata}} helps a client
-distinguish the two but does not change these rules.
+specification; the rules above treat both the same.
 
 A client that did not provide sender-constraint input but receives
 a response containing `cnf` holds a token bound to the identified
@@ -351,27 +349,6 @@ unbound and, if it requires sender-constraining, rejects the
 response ({{client-behavior}}).
 
 
-# Authorization Server Metadata {#as-metadata}
-
-An authorization server that supports this specification SHOULD
-include the following metadata parameter in its OAuth 2.0
-Authorization Server Metadata {{RFC8414}}:
-
-`token_exchange_cnf_response_supported`:
-: OPTIONAL. Boolean value indicating whether the authorization
-  server includes the `cnf` parameter in Token Exchange responses
-  when it has applied sender-constraining to the issued token. If
-  omitted, the default value is `false`.
-
-This metadata distinguishes an authorization server that does not
-implement this specification (and never emits `cnf`) from one that
-implements it but did not sender-constrain a particular token,
-letting a client that requires sender-constraining avoid an
-authorization server that cannot satisfy its policy. It is an
-operational aid only: the rules of {{client-behavior}} fail closed
-on an absent `cnf` regardless of advertised support.
-
-
 # Security Considerations {#security}
 
 ## The Response Parameter Is Informational
@@ -388,9 +365,8 @@ both checks are needed end-to-end.
 This check defends against an authorization server that fails to
 apply sender-constraining through error or misconfiguration. It
 does not defend against a malicious authorization server, which
-issues the token, controls its contents, and can equally misreport
-the metadata of {{as-metadata}}. Protection against a hostile
-issuer is out of scope for this document.
+issues the token and controls its contents entirely. Protection
+against a hostile issuer is out of scope for this document.
 
 ## TLS for the Response {#tls-for-the-response}
 
@@ -423,8 +399,6 @@ response.
 
 # IANA Considerations {#iana}
 
-## OAuth Parameters Registry
-
 IANA is requested to register the following parameter in the "OAuth
 Parameters" registry {{IANA.oauth-parameters}} established by
 {{RFC6749}}:
@@ -433,20 +407,6 @@ Parameters" registry {{IANA.oauth-parameters}} established by
 * Parameter Usage Location: token response
 * Change Controller: IETF
 * Specification Document(s): {{cnf-response-parameter}} of this document
-
-
-## OAuth Authorization Server Metadata Registry
-
-IANA is requested to register the following metadata parameter in
-the "OAuth Authorization Server Metadata" registry
-{{IANA.oauth-parameters}}:
-
-* Metadata Name: `token_exchange_cnf_response_supported`
-* Metadata Description: Boolean indicating whether the authorization
-  server includes a `cnf` parameter in Token Exchange responses for
-  sender-constrained tokens
-* Change Controller: IETF
-* Specification Document(s): {{as-metadata}} of this document
 
 
 --- back
