@@ -78,18 +78,15 @@ Table of Contents
      6.1.  DPoP-Bound Token
      6.2.  Mutual-TLS-Bound Token
      6.3.  No Sender-Constraint Applied
-   7.  Authorization Server Metadata
-   8.  Security Considerations
-     8.1.  The Response Parameter Is Informational
-     8.2.  TLS for the Response
-     8.3.  Replay and Freshness
-     8.4.  Disclosure
-   9.  IANA Considerations
-     9.1.  OAuth Parameters Registry
-     9.2.  OAuth Authorization Server Metadata Registry
-   10. References
-     10.1.  Normative References
-     10.2.  Informative References
+   7.  Security Considerations
+     7.1.  The Response Parameter Is Informational
+     7.2.  TLS for the Response
+     7.3.  Replay and Freshness
+     7.4.  Disclosure
+   8.  IANA Considerations
+   9.  References
+     9.1.  Normative References
+     9.2.  Informative References
    Acknowledgments
    Document History
    Author's Address
@@ -273,8 +270,7 @@ Table of Contents
 
    Absence of cnf indicates either a downgrade (intentional or
    otherwise) or an authorization server that does not implement this
-   specification; the metadata of Section 7 helps a client distinguish
-   the two but does not change these rules.
+   specification; the rules above treat both the same.
 
    A client that did not provide sender-constraint input but receives a
    response containing cnf holds a token bound to the identified key or
@@ -371,29 +367,9 @@ Table of Contents
    unbound and, if it requires sender-constraining, rejects the response
    (Section 5).
 
-7.  Authorization Server Metadata
+7.  Security Considerations
 
-   An authorization server that supports this specification SHOULD
-   include the following metadata parameter in its OAuth 2.0
-   Authorization Server Metadata [RFC8414]:
-
-   token_exchange_cnf_response_supported:  OPTIONAL.  Boolean value
-      indicating whether the authorization server includes the cnf
-      parameter in Token Exchange responses when it has applied sender-
-      constraining to the issued token.  If omitted, the default value
-      is false.
-
-   This metadata distinguishes an authorization server that does not
-   implement this specification (and never emits cnf) from one that
-   implements it but did not sender-constrain a particular token,
-   letting a client that requires sender-constraining avoid an
-   authorization server that cannot satisfy its policy.  It is an
-   operational aid only: the rules of Section 5 fail closed on an absent
-   cnf regardless of advertised support.
-
-8.  Security Considerations
-
-8.1.  The Response Parameter Is Informational
+7.1.  The Response Parameter Is Informational
 
    The cnf response parameter is informational.  Authoritative
    enforcement of the binding occurs when the issued token is presented
@@ -406,24 +382,23 @@ Table of Contents
    This check defends against an authorization server that fails to
    apply sender-constraining through error or misconfiguration.  It does
    not defend against a malicious authorization server, which issues the
-   token, controls its contents, and can equally misreport the metadata
-   of Section 7.  Protection against a hostile issuer is out of scope
-   for this document.
+   token and controls its contents entirely.  Protection against a
+   hostile issuer is out of scope for this document.
 
-8.2.  TLS for the Response
+7.2.  TLS for the Response
 
    TLS, already required for the token endpoint by Section 3.2 of
    [RFC6749], prevents an on-path attacker from stripping or modifying
    the cnf parameter to suppress the binding signal.
 
-8.3.  Replay and Freshness
+7.3.  Replay and Freshness
 
    This specification does not itself prevent replay of the response cnf
    value.  The replay protections of the underlying sender-constraint
    method continue to apply: the DPoP nonce and jti ([RFC9449]) and, for
    mutual TLS, the live TLS session.
 
-8.4.  Disclosure
+7.4.  Disclosure
 
    The cnf response parameter discloses the binding method and a key or
    certificate thumbprint only to the client that initiated the request,
@@ -436,9 +411,7 @@ Table of Contents
    thumbprint from the key it already holds, so a full key discloses
    more material than verification requires and enlarges the response.
 
-9.  IANA Considerations
-
-9.1.  OAuth Parameters Registry
+8.  IANA Considerations
 
    IANA is requested to register the following parameter in the "OAuth
    Parameters" registry [IANA.oauth-parameters] established by
@@ -452,25 +425,9 @@ Table of Contents
 
    *  Specification Document(s): Section 3 of this document
 
-9.2.  OAuth Authorization Server Metadata Registry
+9.  References
 
-   IANA is requested to register the following metadata parameter in the
-   "OAuth Authorization Server Metadata" registry
-   [IANA.oauth-parameters]:
-
-   *  Metadata Name: token_exchange_cnf_response_supported
-
-   *  Metadata Description: Boolean indicating whether the authorization
-      server includes a cnf parameter in Token Exchange responses for
-      sender-constrained tokens
-
-   *  Change Controller: IETF
-
-   *  Specification Document(s): Section 7 of this document
-
-10.  References
-
-10.1.  Normative References
+9.1.  Normative References
 
    [BCP14]    Best Current Practice 14,
               <https://www.rfc-editor.org/info/bcp14>.
@@ -502,11 +459,6 @@ Table of Contents
               RFC 7800, DOI 10.17487/RFC7800, April 2016,
               <https://www.rfc-editor.org/rfc/rfc7800>.
 
-   [RFC8414]  Jones, M., Sakimura, N., and J. Bradley, "OAuth 2.0
-              Authorization Server Metadata", RFC 8414,
-              DOI 10.17487/RFC8414, June 2018,
-              <https://www.rfc-editor.org/rfc/rfc8414>.
-
    [RFC8693]  Jones, M., Nadalin, A., Campbell, B., Ed., Bradley, J.,
               and C. Mortimore, "OAuth 2.0 Token Exchange", RFC 8693,
               DOI 10.17487/RFC8693, January 2020,
@@ -523,7 +475,7 @@ Table of Contents
               Possession (DPoP)", RFC 9449, DOI 10.17487/RFC9449,
               September 2023, <https://www.rfc-editor.org/rfc/rfc9449>.
 
-10.2.  Informative References
+9.2.  Informative References
 
    [I-D.ietf-oauth-identity-assertion-authz-grant]
               Parecki, A., McGuinness, K., and B. Campbell, "Identity
