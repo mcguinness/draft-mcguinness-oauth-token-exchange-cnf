@@ -49,7 +49,7 @@ informative:
 --- abstract
 
 This specification defines a `cnf` response parameter for the OAuth 2.0
-Token Exchange {{RFC8693}} response. The parameter carries the
+Token Exchange (RFC 8693) response. The parameter carries the
 confirmation method that the authorization server applied to the issued
 token, enabling clients to verify that sender-constraint binding (for
 example a DPoP key or mutual-TLS client certificate) was performed
@@ -78,8 +78,9 @@ deployment shapes:
    the client cannot read any claim from it.
 
 2. **Encrypted tokens.** The issued token is a JWE encrypted to a
-   downstream consumer (such as a Resource Authorization Server), and
-   the client does not hold the decryption key.
+   downstream consumer (such as a Resource Authorization Server
+   {{I-D.ietf-oauth-identity-assertion-authz-grant}}), and the client
+   does not hold the decryption key.
 
 3. **`token_type` is "N_A".** {{Section 2.2.1 of RFC8693}} requires the
    `token_type` response parameter to be `N_A` when the issued token
@@ -104,7 +105,7 @@ expected) as a downgrade.
 
 # Conventions and Definitions
 
-{::boilerplate bcp14-tagged}
+{::boilerplate bcp14-tagged-bcp14}
 
 This document uses the terms "access token," "authorization server,"
 "client," "resource server," "token endpoint," and "token response"
@@ -133,10 +134,25 @@ Token Exchange response defined in {{Section 2.2 of RFC8693}}:
   sender-constraint binding without inspecting the issued token.
 
 The structure and member names of the `cnf` response parameter are
-identical to those of the `cnf` JWT claim defined in {{RFC7800}}.
-Implementations supporting this specification reuse the same member
-definitions and registry without introducing new confirmation
-methods.
+identical to those of the `cnf` JWT claim defined in {{RFC7800}}: its
+members are confirmation methods from the IANA "JWT Confirmation
+Methods" registry established by {{RFC7800}}. This specification does
+not define any new confirmation methods. Carrying a Confirmation
+object outside the token itself follows the precedent of token
+introspection, where the authorization server conveys a token's
+confirmation in a `cnf` introspection response member
+({{Section 3.2 of RFC8705}}; {{Section 6.2 of RFC9449}}).
+
+The `cnf` response parameter describes the token returned in the
+`access_token` member of the Token Exchange response (the issued
+token). It makes no statement about any `refresh_token` returned in
+the same response.
+
+This document defines the `cnf` parameter only for responses to Token
+Exchange requests ({{Section 2.2 of RFC8693}}); its use in responses
+to other grant types is out of scope. The parameter is backward
+compatible: a client that does not support this specification ignores
+unrecognized response members per {{Section 5.1 of RFC6749}}.
 
 
 ## Relationship to the In-Token `cnf` Claim {#cnf-comparison}
@@ -157,8 +173,11 @@ are compared by confirmation method and value, not by byte
 representation. JSON member ordering and insignificant whitespace do
 not affect the comparison, and a thumbprint member (for example
 `jkt` or `x5t#S256`) is compared as the base64url-encoded string it
-represents. This avoids a dependency on any particular JSON
-canonicalization scheme.
+represents. If one value carries a full public key in a `jwk` member
+and the other carries a JWK thumbprint, the two are compared by
+computing the JWK SHA-256 Thumbprint ({{RFC7638}}) of the full key.
+This avoids a dependency on any particular JSON canonicalization
+scheme.
 
 When the issued token is opaque or otherwise unreadable by the
 client (for example because it is encrypted to a downstream
@@ -176,7 +195,10 @@ When the authorization server applies sender-constraining to the
 token it issues in response to a Token Exchange request, it MUST
 include the `cnf` parameter in the Token Exchange response. The
 member names and values MUST identify the confirmation method
-actually applied to the issued token.
+actually applied to the issued token. The `cnf` parameter SHOULD
+contain exactly one confirmation member; it MUST NOT contain a
+confirmation member identifying a binding that was not applied to
+the issued token.
 
 When the authorization server does not apply sender-constraining to
 the issued token, it MUST NOT include the `cnf` parameter in the
@@ -204,36 +226,53 @@ DPoP proof or a mutual-TLS client certificate) MUST validate the
 
 1. If the response contains a `cnf` parameter, the client MUST verify
    that the confirmation method and value match the
-   sender-constraint input it provided. For example, if the client
-   provided a DPoP proof, it MUST verify that `cnf` contains a `jkt`
-   member whose value equals the JWK SHA-256 Thumbprint
-   ({{RFC7638}}) of the public key in the DPoP proof JWT.
+   sender-constraint input it provided. If the client provided a
+   DPoP proof, it MUST verify that `cnf` contains a `jkt` member
+   whose value equals the JWK SHA-256 Thumbprint ({{RFC7638}}) of
+   the public key in the DPoP proof JWT. If the client presented a
+   mutual-TLS client certificate, it MUST verify that `cnf` contains
+   an `x5t#S256` member whose value equals the base64url-encoded
+   SHA-256 hash of the DER encoding of that certificate
+   ({{RFC8705}}). If verification fails, the client MUST reject the
+   response and not use the issued token.
 
 2. If the response does not contain a `cnf` parameter, the client
    MUST treat the response as if the issued token is not
    sender-constrained. If the client requires sender-constraining,
    it MUST reject the response and not use the issued token. Absence
-   of `cnf` when sender-constraining was requested is a downgrade
-   attempt by the authorization server (intentional or otherwise).
+   of `cnf` when sender-constraining was requested indicates either
+   a downgrade (intentional or otherwise) or an authorization server
+   that does not implement this specification; the metadata of
+   {{as-metadata}} helps the client distinguish the two, but does
+   not change this rule.
 
 3. If the response contains a `cnf` parameter whose confirmation
-   method does not match what the client provided (for example a
+   method does not match what the client provided (for example an
    `x5t#S256` value when the client provided a DPoP proof), the
    client MUST reject the response.
 
-A client that did not provide sender-constraint input in the
-request, but receives a response containing `cnf`, MAY use the issued
-token. The presence of `cnf` informs the client that the token is
-sender-constrained, and the client SHOULD honor the constraint when
-presenting the token (for example by including a DPoP proof when
-calling a resource server).
+4. If the `cnf` parameter contains more than one confirmation
+   member, the client MUST apply the checks above to the member that
+   corresponds to its sender-constraint input and MUST ignore
+   members whose confirmation method it does not recognize.
+
+A client that did not provide sender-constraint input in the request
+but receives a response containing `cnf` holds a token that is bound
+to the key or certificate the `cnf` value identifies. If the client
+holds that key or certificate (for example, the client certificate
+it used for mutual-TLS client authentication), it MAY use the issued
+token and SHOULD satisfy the confirmation method when presenting the
+token (for example, by presenting the token over a mutual-TLS
+connection using that certificate). If the client does not hold the
+identified key or certificate, the issued token is unusable, and the
+client SHOULD treat the response as an error.
 
 
 # Examples {#examples}
 
 The examples in this section illustrate the `cnf` response parameter
-for different confirmation methods. Line breaks are introduced for
-readability; the actual response is a single JSON object.
+for different confirmation methods. Extra line breaks in request
+bodies and header fields are for display purposes only.
 
 ## DPoP-Bound Token
 
@@ -252,11 +291,13 @@ Host: as.example
 Content-Type: application/x-www-form-urlencoded
 DPoP: eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7...
 
-grant_type=urn:ietf:params:oauth:grant-type:token-exchange
-&requested_token_type=urn:ietf:params:oauth:token-type:id-jag
-&audience=https://ras.example/
+grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+&requested_token_type=
+ urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aid-jag
+&audience=https%3A%2F%2Fras.example%2F
 &subject_token=eyJraWQiOiJzMTZ0cVNtODhwREo4VGZCXzdrSEtQ...
-&subject_token_type=urn:ietf:params:oauth:token-type:id_token
+&subject_token_type=
+ urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aid_token
 ~~~
 
 ~~~http
@@ -289,6 +330,7 @@ in the response.
 ~~~http
 HTTP/1.1 200 OK
 Content-Type: application/json;charset=UTF-8
+Cache-Control: no-store
 
 {
   "issued_token_type":
@@ -311,6 +353,7 @@ omits `cnf`.
 ~~~http
 HTTP/1.1 200 OK
 Content-Type: application/json;charset=UTF-8
+Cache-Control: no-store
 
 {
   "issued_token_type": "urn:ietf:params:oauth:token-type:id-jag",
@@ -323,7 +366,9 @@ Content-Type: application/json;charset=UTF-8
 A client that did not provide sender-constraint input is not
 expected to find `cnf` in the response. A client that did provide
 sender-constraint input but receives a response without `cnf` MUST
-reject the response per {{client-behavior}}.
+treat the issued token as not sender-constrained and, if it requires
+sender-constraining, MUST reject the response per
+{{client-behavior}}.
 
 
 # Authorization Server Metadata {#as-metadata}
@@ -335,8 +380,8 @@ Authorization Server Metadata {{RFC8414}}:
 `token_exchange_cnf_response_supported`:
 : OPTIONAL. Boolean value indicating whether the authorization
   server includes the `cnf` parameter in Token Exchange responses
-  when it has applied sender-constraining to the issued token.
-  Default is `false`.
+  when it has applied sender-constraining to the issued token. If
+  omitted, the default value is `false`.
 
 This metadata lets a client distinguish an authorization server that
 does not implement this specification (and therefore never emits
@@ -380,9 +425,10 @@ document.
 ## Absence Equals Unbound
 
 The `cnf` response parameter MUST be present when the issued token
-is sender-constrained and MUST be absent when it is not. A
-zero-length, malformed, or partial `cnf` MUST be treated by the
-client as if `cnf` were absent.
+is sender-constrained and MUST be absent when it is not. A `cnf`
+value that is not a JSON object, is an empty JSON object, or
+contains no confirmation member that the client can verify MUST be
+treated by the client as if `cnf` were absent.
 
 Clients MUST NOT treat the presence of `cnf` itself as proof of
 binding without verifying the contents against the
@@ -390,10 +436,11 @@ sender-constraint input they provided.
 
 ## TLS for the Response {#tls-for-the-response}
 
-The Token Exchange response is delivered over TLS per {{Section 4 of RFC8693}}.
-Without TLS, an on-path attacker could strip or modify
-the `cnf` parameter to suppress the binding signal. Implementations
-MUST NOT operate the Token Exchange endpoint without TLS.
+The Token Exchange response is delivered over TLS, as required for
+the token endpoint by {{Section 3.2 of RFC6749}}. Without TLS, an
+on-path attacker could strip or modify the `cnf` parameter to
+suppress the binding signal. Implementations MUST NOT operate the
+Token Exchange endpoint without TLS.
 
 ## Replay and Freshness
 
